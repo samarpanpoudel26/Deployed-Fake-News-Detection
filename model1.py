@@ -1,6 +1,9 @@
 # %%
 import pandas as pd
 import nltk
+nltk.download('stopwords')
+nltk.download('punkt')
+nltk.download('wordnet')
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 import re
@@ -8,9 +11,7 @@ import string
 from sklearn.feature_extraction.text import CountVectorizer 
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import MultinomialNB
-nltk.download('stopwords')
-nltk.download('punkt')
-nltk.download('wordnet')
+
 
 # %%
 dataset=pd.read_csv("data.xls")
