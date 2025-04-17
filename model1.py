@@ -1,32 +1,29 @@
-import streamlit as st
 import pandas as pd
 import nltk
+import os
 import re
 import string
+import streamlit as st
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from sklearn.feature_extraction.text import CountVectorizer 
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import MultinomialNB
 
-# ======= One-time Downloads (at runtime only when needed) =======
-def ensure_nltk_data():
-    try:
-        nltk.data.find('tokenizers/punkt')
-    except LookupError:
-        nltk.download('punkt')
+# ======== Download NLTK resources safely & persistently ========
+nltk_data_path = os.path.join(os.getcwd(), "nltk_data")
+nltk.data.path.append(nltk_data_path)
 
+for resource in ['punkt', 'stopwords', 'wordnet']:
     try:
-        nltk.data.find('corpora/stopwords')
+        if resource == 'punkt':
+            nltk.data.find(f'tokenizers/{resource}')
+        else:
+            nltk.data.find(f'corpora/{resource}')
     except LookupError:
-        nltk.download('stopwords')
+        nltk.download(resource, download_dir=nltk_data_path)
 
-    try:
-        nltk.data.find('corpora/wordnet')
-    except LookupError:
-        nltk.download('wordnet')
-
-# ======= Preprocessing Function =======
+# ======== Preprocessing Function ========
 def preprocessing(text):
     text = text.lower()
     text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
@@ -38,11 +35,8 @@ def preprocessing(text):
     cleaned_text = " ".join(tokens)
     return cleaned_text
 
-# ======= Training the model (lazy-loaded inside function) =======
-@st.cache_resource
+# ======== Load + Train Model (without caching for now) ========
 def load_model():
-    ensure_nltk_data()
-
     dataset = pd.read_csv("data.xls")
     dataset.drop(columns=["URLs", "Headline"], axis=1, inplace=True)
     dataset.dropna(inplace=True)
@@ -59,13 +53,10 @@ def load_model():
 
     return model, vectorizer
 
-# ======= User Input Prediction =======
+# ======== Predict Function Used by app.py ========
 def user_input(text):
     model, vectorizer = load_model()
-    ensure_nltk_data()
-
     cleaned = preprocessing(text)
     transformed = vectorizer.transform([cleaned])
     prediction = model.predict(transformed)
-
     return int(prediction[0])
