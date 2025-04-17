@@ -1,110 +1,70 @@
-# %%
 import pandas as pd
 import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
 import re
 import string
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
 from sklearn.feature_extraction.text import CountVectorizer 
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import MultinomialNB
 
-import nltk
+# ======= One-time Downloads (at runtime only when needed) =======
+def ensure_nltk_data():
+    try:
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        nltk.download('punkt')
 
-# Only download if needed
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
+    try:
+        nltk.data.find('corpora/stopwords')
+    except LookupError:
+        nltk.download('stopwords')
 
-try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    nltk.download('stopwords')
+    try:
+        nltk.data.find('corpora/wordnet')
+    except LookupError:
+        nltk.download('wordnet')
 
-try:
-    nltk.data.find('corpora/wordnet')
-except LookupError:
-    nltk.download('wordnet')
-
-
-# %%
-dataset=pd.read_csv("data.xls")
-
-# %%
-dataset.head(3)
-
-# %%
-dataset.isnull().sum()
-
-# %%
-dataset.drop(columns="URLs",axis=1,inplace=True)
-dataset.drop(columns="Headline",axis=1,inplace=True)
-
-# %%
-dataset.dropna(inplace=True)
-
-# %%
-dataset.isnull().sum()
-
-# %%
-dataset=dataset.sample(frac=1)
-
-# %%
+# ======= Preprocessing Function =======
 def preprocessing(text):
-    """
-    Function that does all the steps of Natural Language Processing.
-    
-    """
-    
     text = text.lower()
     text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
     text = text.translate(str.maketrans('', '', string.punctuation))
     text = re.sub(r'\d+', '', text)
     tokens = word_tokenize(text)
     stop_words = set(stopwords.words('english'))
-    tokens = [word for word in tokens if word not in stop_words]
+    tokens = [word for word in tokens if word not in stop_words and len(word) > 2]
     cleaned_text = " ".join(tokens)
-   
     return cleaned_text
 
-# %%
-dataset["Body"]=dataset["Body"].apply(preprocessing)
+# ======= Training the model (lazy-loaded inside function) =======
+@st.cache_resource
+def load_model():
+    ensure_nltk_data()
 
-# %%
-vectorizer=CountVectorizer()
+    dataset = pd.read_csv("data.xls")
+    dataset.drop(columns=["URLs", "Headline"], axis=1, inplace=True)
+    dataset.dropna(inplace=True)
+    dataset = dataset.sample(frac=1)
+    dataset["Body"] = dataset["Body"].apply(preprocessing)
 
-# %%
-X=vectorizer.fit_transform(dataset["Body"])
+    vectorizer = CountVectorizer()
+    X = vectorizer.fit_transform(dataset["Body"])
+    y = dataset["Label"]
 
-# %%
-Y=dataset[["Label"]]
+    x_train, x_test, y_train, y_test = train_test_split(X, y, random_state=42, test_size=0.2)
+    model = MultinomialNB()
+    model.fit(x_train, y_train)
 
-# %%
-x_train,x_test,y_train,y_test=train_test_split(X,Y,random_state=42,test_size=0.2)
+    return model, vectorizer
 
-# %%
-mnb=MultinomialNB()
-mnb.fit(x_train,y_train)
+# ======= User Input Prediction =======
+def user_input(text):
+    model, vectorizer = load_model()
+    ensure_nltk_data()
 
-# %%
-mnb.score(x_test,y_test)*100,mnb.score(x_train,y_train)*100
+    cleaned = preprocessing(text)
+    transformed = vectorizer.transform([cleaned])
+    prediction = model.predict(transformed)
 
-# %%
-def user_input(user_text):
-    """
-    Function to Predict User Input
-    """
-      
-    cleaned_text = preprocessing(user_text)  # Preprocess it
-    transformed_text = vectorizer.transform([cleaned_text])  # Convert to numerical format
-    prediction = mnb.predict(transformed_text)# Predict
-    
-    if prediction==1:
-        print("Not a fake News")
-    else:
-        print("Fake news")
-    return prediction
-
-
-
+    return int(prediction[0])
